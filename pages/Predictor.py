@@ -408,6 +408,7 @@ if scope == "All Gates Combined":
         text=[f"{v:,}" for v in gate_summary["Remaining"].clip(lower=0)],
         textposition="inside",
     ))
+    fig_progress.update_yaxes(type="category")
     fig_progress.update_layout(
         barmode="stack", height=350, hovermode="y unified",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),

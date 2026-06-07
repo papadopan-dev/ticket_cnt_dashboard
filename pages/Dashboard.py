@@ -193,6 +193,7 @@ latest = filtered_long[filtered_long["Date"] == filtered_long["Date"].max()]
 gate_totals = latest.groupby("Gate")["Cumulative"].sum().reset_index()
 gate_totals.columns = ["Gate", "Tickets"]
 gate_totals = gate_totals.sort_values("Tickets", ascending=True)
+gate_totals["Gate"] = gate_totals["Gate"].astype(str)
 
 with col_left:
     st.subheader("Current Tickets by Gate")
@@ -200,6 +201,7 @@ with col_left:
                        color="Tickets", color_continuous_scale="Viridis",
                        text="Tickets")
     fig_gates.update_traces(textposition="outside")
+    fig_gates.update_yaxes(type="category")
     fig_gates.update_layout(height=400, showlegend=False, coloraxis_showscale=False)
     st.plotly_chart(fig_gates, use_container_width=True)
 
