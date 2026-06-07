@@ -7,6 +7,9 @@ import time
 from datetime import datetime
 from data_loader import load_data, reshape_data
 
+# Plotly config: disable drag/pan/zoom for touch screens
+PLOTLY_CONFIG = {"scrollZoom": False, "displayModeBar": False}
+
 # ─── Custom CSS ──────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
@@ -116,11 +119,16 @@ if not filtered_long.empty:
 
     # New tickets sold on latest date
     latest_daily = latest_data["Daily"].sum()
+    latest_days = latest_data["DaysBetween"].iloc[0]
+    latest_daily_rate = latest_daily / latest_days if latest_days > 0 else 0
 
-    # Total new tickets across all dates
-    total_daily_sold = filtered_long["Daily"].sum()
+    # True avg new per day: total new tickets / total calendar days spanned
+    first_date = filtered_long["Date"].min()
+    total_calendar_days = (latest_date - first_date).days
+    first_cumulative = filtered_long[filtered_long["Date"] == first_date]["Cumulative"].sum()
+    total_new = current_total - first_cumulative
+    avg_daily = total_new / total_calendar_days if total_calendar_days > 0 else 0
     num_dates = filtered_long["Date"].nunique()
-    avg_daily = total_daily_sold / num_dates if num_dates > 0 else 0
 
     # Best gate by current cumulative
     best_gate = latest_data.groupby("Gate")["Cumulative"].sum().idxmax()
@@ -150,7 +158,7 @@ with col2:
 with col3:
     st.metric("Avg New/Day", f"{avg_daily:,.0f}")
 with col4:
-    st.metric("Latest Day New", f"{latest_daily:,}",
+    st.metric("Latest Period New", f"{latest_daily:,} ({latest_days}d)",
               delta=f"{delta:+,} ({delta_pct:+.1f}%)" if delta != 0 else None)
 with col5:
     st.metric("Top Gate", f"{best_gate}", delta=f"{best_gate_total:,} total")
@@ -159,17 +167,18 @@ st.markdown("---")
 
 # ─── Charts ──────────────────────────────────────────────────────────────────
 
-# 1. Cumulative Total Over Time + Daily New Sales
-st.subheader("Cumulative Tickets Sold & Daily New Sales")
+# 1. Cumulative Total Over Time + New Sales Per Period
+st.subheader("Cumulative Tickets Sold & New Sales Per Period")
 daily_agg = filtered_long.groupby("Date").agg(
     Cumulative=("Cumulative", "sum"),
     Daily=("Daily", "sum"),
+    DailyRate=("DailyRate", "sum"),
 ).reset_index()
 
 fig_trend = make_subplots(specs=[[{"secondary_y": True}]])
 fig_trend.add_trace(
     go.Bar(x=daily_agg["Date"], y=daily_agg["Daily"],
-           name="New Tickets", marker_color="#667eea", opacity=0.7),
+           name="New Per Period", marker_color="#667eea", opacity=0.7),
     secondary_y=False,
 )
 fig_trend.add_trace(
@@ -178,12 +187,12 @@ fig_trend.add_trace(
     secondary_y=True,
 )
 fig_trend.update_layout(
-    height=450, hovermode="x unified",
+    height=450, hovermode="x unified", dragmode=False,
     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
 )
-fig_trend.update_yaxes(title_text="New Tickets", secondary_y=False)
+fig_trend.update_yaxes(title_text="New Per Period", secondary_y=False)
 fig_trend.update_yaxes(title_text="Cumulative Total", secondary_y=True)
-st.plotly_chart(fig_trend, use_container_width=True)
+st.plotly_chart(fig_trend, use_container_width=True, config=PLOTLY_CONFIG)
 
 # 2. Sales by Gate - two columns
 col_left, col_right = st.columns(2)
@@ -202,8 +211,8 @@ with col_left:
                        text="Tickets")
     fig_gates.update_traces(textposition="outside")
     fig_gates.update_yaxes(type="category")
-    fig_gates.update_layout(height=400, showlegend=False, coloraxis_showscale=False)
-    st.plotly_chart(fig_gates, use_container_width=True)
+    fig_gates.update_layout(height=400, showlegend=False, coloraxis_showscale=False, dragmode=False)
+    st.plotly_chart(fig_gates, use_container_width=True, config=PLOTLY_CONFIG)
 
 with col_right:
     st.subheader("Gate Distribution")
@@ -211,14 +220,14 @@ with col_right:
                      color_discrete_sequence=px.colors.qualitative.Set3,
                      hole=0.4)
     fig_pie.update_traces(textposition="inside", textinfo="percent+label")
-    fig_pie.update_layout(height=400)
-    st.plotly_chart(fig_pie, use_container_width=True)
+    fig_pie.update_layout(height=400, dragmode=False)
+    st.plotly_chart(fig_pie, use_container_width=True, config=PLOTLY_CONFIG)
 
 # 3. Cumulative Over Time by Gate
 st.subheader("Cumulative Sales by Gate Over Time")
-view_mode = st.radio("View", ["Cumulative", "Daily New"], horizontal=True,
+view_mode = st.radio("View", ["Cumulative", "Avg New/Day"], horizontal=True,
                      label_visibility="collapsed")
-y_col = "Cumulative" if view_mode == "Cumulative" else "Daily"
+y_col = "Cumulative" if view_mode == "Cumulative" else "DailyRate"
 
 chart_type = st.radio("Chart type", ["Stacked Area", "Line", "Stacked Bar"],
                       horizontal=True, label_visibility="collapsed",
@@ -234,16 +243,16 @@ else:
     fig_area = px.bar(filtered_long, x="Date", y=y_col, color="Gate",
                       color_discrete_sequence=px.colors.qualitative.Set2)
 
-fig_area.update_layout(height=450, hovermode="x unified",
+fig_area.update_layout(height=450, hovermode="x unified", dragmode=False,
                        legend=dict(orientation="h", yanchor="bottom", y=1.02,
                                    xanchor="right", x=1))
-st.plotly_chart(fig_area, use_container_width=True)
+st.plotly_chart(fig_area, use_container_width=True, config=PLOTLY_CONFIG)
 
-# 4. Day-over-Day Change (new tickets per day)
-st.subheader("Day-over-Day New Tickets")
+# 4. Period-over-Period Change (true daily rate)
+st.subheader("Avg Daily Rate Change Between Recordings")
 daily_change = daily_agg.copy()
-daily_change["Change"] = daily_change["Daily"].diff()
-daily_change["Change %"] = daily_change["Daily"].pct_change() * 100
+daily_change["Change"] = daily_change["DailyRate"].diff()
+daily_change["Change %"] = daily_change["DailyRate"].pct_change() * 100
 daily_change = daily_change.iloc[1:]  # skip first row (no previous)
 
 if not daily_change.empty:
@@ -252,37 +261,39 @@ if not daily_change.empty:
     fig_change.add_trace(go.Bar(
         x=daily_change["Date"], y=daily_change["Change"],
         marker_color=colors, name="Change",
-        text=[f"{v:+,.0f}" for v in daily_change["Change"]],
+        text=[f"{v:+,.1f}" for v in daily_change["Change"]],
         textposition="outside"
     ))
-    fig_change.update_layout(height=350, hovermode="x unified")
-    st.plotly_chart(fig_change, use_container_width=True)
+    fig_change.update_layout(height=350, hovermode="x unified", dragmode=False)
+    st.plotly_chart(fig_change, use_container_width=True, config=PLOTLY_CONFIG)
 else:
     st.info("Need at least 2 dates to show day-over-day changes.")
 
-# 6. Gate Performance Summary
+# 5. Gate Performance Summary
 st.subheader("Gate Performance Summary")
 latest_cum = filtered_long[filtered_long["Date"] == filtered_long["Date"].max()]
 summary = latest_cum[["Gate", "Cumulative"]].copy()
 summary.columns = ["Gate", "Current Total"]
-daily_stats = filtered_long.groupby("Gate")["Daily"].agg(
+# Exclude first recording (pre-existing sales, not tracked growth)
+tracked = filtered_long[~filtered_long["IsFirst"]]
+daily_rate_stats = tracked.groupby("Gate")["DailyRate"].agg(
     ["mean", "min", "max", "std"]
 ).reset_index()
-daily_stats.columns = ["Gate", "Avg New/Day", "Min New/Day", "Max New/Day", "Std Dev"]
-summary = summary.merge(daily_stats, on="Gate")
+daily_rate_stats.columns = ["Gate", "Avg/Day", "Min/Day", "Max/Day", "Std Dev"]
+summary = summary.merge(daily_rate_stats, on="Gate")
 summary["% of Total"] = (summary["Current Total"] / summary["Current Total"].sum() * 100).round(1)
 summary = summary.sort_values("Current Total", ascending=False)
 
 # Format numbers
-for col in ["Avg New/Day", "Std Dev"]:
+for col in ["Avg/Day", "Std Dev"]:
     summary[col] = summary[col].round(1)
 
 st.dataframe(
     summary.style.format({
         "Current Total": "{:,.0f}",
-        "Avg New/Day": "{:,.1f}",
-        "Min New/Day": "{:,.0f}",
-        "Max New/Day": "{:,.0f}",
+        "Avg/Day": "{:,.1f}",
+        "Min/Day": "{:,.1f}",
+        "Max/Day": "{:,.1f}",
         "Std Dev": "{:,.1f}",
         "% of Total": "{:.1f}%",
     }).background_gradient(subset=["Current Total"], cmap="YlOrRd"),

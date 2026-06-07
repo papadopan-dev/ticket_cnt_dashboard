@@ -6,6 +6,9 @@ from scipy.optimize import curve_fit
 from datetime import timedelta
 from data_loader import load_data, reshape_data
 
+# Plotly config: disable drag/pan/zoom for touch screens
+PLOTLY_CONFIG = {"scrollZoom": False, "displayModeBar": False}
+
 st.markdown("""
 <style>
     .stApp > header { background-color: transparent; }
@@ -274,12 +277,12 @@ for model_name, result in results.items():
         ))
 
 fig.update_layout(
-    height=550, hovermode="x unified",
+    height=550, hovermode="x unified", dragmode=False,
     xaxis_title="Date", yaxis_title="Total Tickets",
     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     yaxis=dict(rangemode="tozero"),
 )
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, use_container_width=True, config=PLOTLY_CONFIG)
 
 # ─── Model Comparison Table ─────────────────────────────────────────────────
 st.subheader("When Will You Hit Your Target?")
@@ -376,11 +379,11 @@ if sim_daily > 0:
                       annotation_text=f"Target: {target:,}")
 
     fig_sim.update_layout(
-        height=400, hovermode="x unified",
+        height=400, hovermode="x unified", dragmode=False,
         xaxis_title="Date", yaxis_title="Total Tickets",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
-    st.plotly_chart(fig_sim, use_container_width=True)
+    st.plotly_chart(fig_sim, use_container_width=True, config=PLOTLY_CONFIG)
 
 # ─── Per-Gate Projections ────────────────────────────────────────────────────
 if scope == "All Gates Combined":
@@ -410,10 +413,10 @@ if scope == "All Gates Combined":
     ))
     fig_progress.update_yaxes(type="category")
     fig_progress.update_layout(
-        barmode="stack", height=350, hovermode="y unified",
+        barmode="stack", height=350, hovermode="y unified", dragmode=False,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
-    st.plotly_chart(fig_progress, use_container_width=True)
+    st.plotly_chart(fig_progress, use_container_width=True, config=PLOTLY_CONFIG)
 
     st.dataframe(
         gate_summary.style.format({

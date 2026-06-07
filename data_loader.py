@@ -53,8 +53,14 @@ def reshape_data(df: pd.DataFrame) -> pd.DataFrame:
 
     melted["Daily"] = melted.groupby("Gate")["Cumulative"].diff().fillna(0).astype(int)
     first_dates = melted.groupby("Gate")["Date"].transform("min")
-    melted.loc[melted["Date"] == first_dates, "Daily"] = melted.loc[
-        melted["Date"] == first_dates, "Cumulative"
+    melted["IsFirst"] = melted["Date"] == first_dates
+    melted.loc[melted["IsFirst"], "Daily"] = melted.loc[
+        melted["IsFirst"], "Cumulative"
     ]
+
+    # Compute days between recordings and true daily rate
+    melted["DaysBetween"] = melted.groupby("Gate")["Date"].diff().dt.days.fillna(1).astype(int)
+    melted.loc[melted["DaysBetween"] == 0, "DaysBetween"] = 1  # avoid division by zero
+    melted["DailyRate"] = (melted["Daily"] / melted["DaysBetween"]).round(2)
 
     return melted
